@@ -1,5 +1,5 @@
 # Image Preprocessing Module
-# Enhanced EasyOCR with layout preservation and unique page naming
+# Enhanced EasyOCR with simple, robust line cropping
 
 import easyocr
 import cv2
@@ -11,23 +11,32 @@ import logging
 import re
 from typing import List, Dict, Tuple, Optional
 from collections import defaultdict
+from SimpleLineCropping import SimpleLineCroppingProcessor
 
 # Get logger
 logger = logging.getLogger('DocumentProcessor')
 
 class EnhancedEasyOCRProcessor:
-    """Enhanced EasyOCR with precise layout preservation and document structure recognition"""
+    """Enhanced EasyOCR with precise layout preservation and simple line cropping"""
     
-    def __init__(self, languages=['en'], gpu=True):
+    def __init__(self, languages=['en'], gpu=True, use_line_cropping=False):
         """Initialize Enhanced EasyOCR with configuration"""
         logger.info("Initializing Enhanced EasyOCR Processor...")
         self.reader = easyocr.Reader(languages, gpu=gpu)
         
+        # Initialize simple line cropping if enabled
+        self.use_line_cropping = use_line_cropping
+        if self.use_line_cropping:
+            self.line_cropper = SimpleLineCroppingProcessor(languages, gpu)
+            logger.info("Simple line cropping enabled")
+        else:
+            logger.info("Using standard processing")
+        
         # Configuration for layout preservation
-        self.line_threshold = 15  # Vertical threshold for grouping text into lines
-        self.word_spacing_threshold = 20  # Horizontal threshold for word spacing
-        self.section_break_threshold = 30  # Vertical threshold for section breaks
-        self.confidence_threshold = 0.5  # Minimum confidence for text detection
+        self.line_threshold = 15
+        self.word_spacing_threshold = 20
+        self.section_break_threshold = 30
+        self.confidence_threshold = 0.5
         
         # Header identification keywords
         self.header_keywords = [
@@ -46,7 +55,7 @@ class EnhancedEasyOCRProcessor:
         logger.info("Enhanced EasyOCR Processor initialized successfully")
     
     def extract_text_with_enhanced_layout(self, image, save_debug=True, page_number=None):
-        """Extract text with enhanced layout preservation and unique page naming"""
+        """Extract text with enhanced layout preservation and optional simple line cropping"""
         logger.info(f"Starting enhanced text extraction for page {page_number}...")
         
         # Import debug directory from main module
@@ -67,8 +76,68 @@ class EnhancedEasyOCRProcessor:
         image_height, image_width = opencv_image.shape[:2]
         logger.info(f"Processing image dimensions: {image_width}x{image_height}")
         
+        # Choose processing method based on configuration
+        if self.use_line_cropping:
+            logger.info(f"Using simple line cropping for page {page_number}")
+            return self._process_with_simple_cropping(opencv_image, debug_dir, page_number)
+        else:
+            logger.info(f"Using standard processing for page {page_number}")
+            return self._process_with_standard_method(opencv_image, debug_dir, page_number, image_width, image_height)
+    
+    def _process_with_simple_cropping(self, opencv_image, debug_dir, page_number):
+        """Process image using simple line cropping method"""
+        try:
+            # Use simple cropping processor
+            crop_results = self.line_cropper.process_image_with_simple_cropping(
+                opencv_image, page_number, debug_dir
+            )
+            
+            # Convert simple cropping results to our standard format
+            formatted_text = crop_results.get('formatted_text', '')
+            all_text_elements = crop_results.get('all_text_elements', [])
+            text_lines = crop_results.get('text_lines', [])
+            
+            if not all_text_elements:
+                logger.warning(f"No text elements found with simple cropping for page {page_number}")
+                return {"formatted_text": "", "sections": {}, "statistics": {}}
+            
+            # Convert strip results to our line format for section identification
+            converted_lines = []
+            for line_result in text_lines:
+                line_elements = line_result.get('text_elements', [])
+                if line_elements:
+                    converted_lines.append(line_elements)
+            
+            # Identify document sections using converted lines
+            sections = self._identify_enhanced_sections(converted_lines)
+            
+            # Format output in our standard format
+            formatted_output = self._format_enhanced_output(sections, opencv_image.shape[1], 'simple_line_cropping', page_number)
+            
+            # Override formatted text with cropping result (it's better formatted)
+            formatted_output['formatted_text'] = formatted_text
+            
+            # Add simple cropping statistics
+            crop_stats = crop_results.get('statistics', {})
+            formatted_output['statistics'].update({
+                'line_cropping_used': True,
+                'total_strips_processed': crop_stats.get('strips_processed', 0),
+                'total_lines_detected': crop_stats.get('total_strips', 0),
+                'cropping_method': 'simple_uniform_strips'
+            })
+            
+            logger.info(f"Simple cropping successful for page {page_number}: {crop_stats.get('total_elements', 0)} elements found")
+            return formatted_output
+            
+        except Exception as e:
+            logger.error(f"Simple cropping failed for page {page_number}: {str(e)}")
+            logger.info(f"Falling back to standard processing for page {page_number}")
+            return self._process_with_standard_method(opencv_image, debug_dir, page_number, opencv_image.shape[1], opencv_image.shape[0])
+    
+    def _process_with_standard_method(self, opencv_image, debug_dir, page_number, image_width, image_height):
+        """Process image using standard method with multiple preprocessing approaches"""
         # Try multiple preprocessing methods for best results with unique naming
-        methods = self._get_preprocessing_methods(opencv_image, save_debug, debug_dir, page_number)
+        methods = self._get_preprocessing_methods(opencv_image, True, debug_dir, page_number)
         
         best_result = None
         best_score = 0
@@ -156,7 +225,7 @@ class EnhancedEasyOCRProcessor:
             cv2.imwrite(os.path.join(debug_dir, filename), morph)
             logger.debug(f"Saved: {filename}")
         
-        # Method 6: Adaptive threshold (additional method)
+        # Method 6: Adaptive threshold
         adaptive_thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
         methods['adaptive_threshold'] = adaptive_thresh
         if save_debug:
@@ -467,6 +536,7 @@ class EnhancedEasyOCRProcessor:
         output['metadata'] = {
             'page_number': page_number,
             'preprocessing_method': method_used,
+            'line_cropping_used': self.use_line_cropping,
             'line_threshold': self.line_threshold,
             'word_spacing_threshold': self.word_spacing_threshold,
             'section_break_threshold': self.section_break_threshold,
@@ -617,39 +687,3 @@ class EnhancedEasyOCRProcessor:
             'section_statistics': section_stats,
             'processing_timestamp': datetime.now().isoformat()
         }
-
-
-# Update the main processing function to pass page numbers
-def process_document_with_page_numbers(pdf_path, debug_dir="Debug"):
-    """Example of how to use the enhanced processor with page numbers"""
-    processor = EnhancedEasyOCRProcessor()
-    
-    # Assuming you have a PDF processing loop
-    import fitz  # PyMuPDF
-    doc = fitz.open(pdf_path)
-    
-    all_results = []
-    
-    for page_num in range(len(doc)):
-        logger.info(f"Processing page {page_num + 1} of {len(doc)}")
-        
-        # Get page as image
-        page = doc.load_page(page_num)
-        pix = page.get_pixmap(matrix=fitz.Matrix(2.0, 2.0))  # 2x zoom
-        img_data = pix.tobytes("png")
-        
-        # Convert to PIL Image
-        from io import BytesIO
-        pil_image = Image.open(BytesIO(img_data))
-        
-        # Process with page number for unique naming
-        result = processor.extract_text_with_enhanced_layout(
-            pil_image, 
-            save_debug=True, 
-            page_number=page_num + 1  # 1-based page numbering
-        )
-        
-        all_results.append(result)
-    
-    doc.close()
-    return all_results
