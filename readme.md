@@ -41,8 +41,8 @@ This repository contains the research and implementation of a hybrid AI pipeline
 
 1. Clone the repo:
    ```bash
-   git clone https://github.com/yourusername/eob-to-json.git
-   cd eob-to-json
+   git clone https://github.com/Meghpatel2810/Pdf-document-to-JSON
+   cd Pdf-document-to-JSON
 
 2. Create and activate a virtual environment and Install dependencies
 
