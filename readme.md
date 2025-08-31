@@ -27,18 +27,15 @@ This repository contains the research and implementation of a hybrid AI pipeline
 
 ## 📂 Directory Structure
 
-├── App/
-│ ├── OCR_PDF_Extractor.py # Main script: PDF → JSON
-│ ├── image_preprocessing.py # Preprocessing helpers
-│ └── llm_postprocess.py # LLM-based structuring
-├── Debug/ # Intermediate OCR outputs, debug images
-├── Input/ # PDFs to process
-├── Outputs/ # Generated JSON files
-├── Structure/ # Predefined JSON schemas
-├── Logs/ # Python logging outputs
-├── requirements.txt # Python dependencies
-└── .gitignore
-
+├── App/ <br>
+│ ├── # Main script: PDF → JSON <br>
+├── Debug/ # Intermediate OCR outputs, debug images  <br>
+├── Input/ # PDFs to process <br>
+├── Outputs/ # Generated JSON files <br>
+├── Structure/ # Predefined JSON schemas <br>
+├── Logs/ # Python logging outputs <br>
+├── requirements.txt # Python dependencies <br>
+└── .gitignore <br>
 
 ## ⚙️ Setup
 
@@ -49,10 +46,11 @@ This repository contains the research and implementation of a hybrid AI pipeline
 
 2. Create and activate a virtual environment and Install dependencies
 
+```bash
 python -m venv venv
 # Windows (PowerShell)
 .\venv\Scripts\activate
 # macOS/Linux
 source venv/bin/activate
 pip install -r requirements.txt
-Pytorch library for specific cuda version from https://pytorch.org/
+# Pytorch library for specific cuda version from https://pytorch.org/
